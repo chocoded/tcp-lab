@@ -3,7 +3,7 @@
 
 #include "tcp.h"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   int N = 1000;
   std::set<uint32_t> numbers;
   // test generation of initial sequence numbers
@@ -14,5 +14,6 @@ int main(int argc, char *argv[]) {
     usleep(10);
   }
   assert(numbers.size() == N);
+  printf("All tests passed🎉🎉🎉\n");
   return 0;
 }

@@ -6,10 +6,10 @@
 #include <stdio.h>
 
 // mapping from fd to TCP connection
-std::map<int, TCP *> tcp_fds;
+std::map<int, TCP*> tcp_fds;
 
 // some helper functions
-const char *tcp_state_to_string(TCPState state) {
+const char* tcp_state_to_string(TCPState state) {
   switch (state) {
   case TCPState::LISTEN:
     return "LISTEN";
@@ -42,15 +42,15 @@ const char *tcp_state_to_string(TCPState state) {
 void TCP::set_state(TCPState new_state) {
   // for unit tests
   printf("TCP state transitioned from %s to %s\n", tcp_state_to_string(state),
-         tcp_state_to_string(new_state));
+    tcp_state_to_string(new_state));
   fflush(stdout);
   state = new_state;
 }
 
 // construct ip header from tcp connection
-void construct_ip_header(uint8_t *buffer, const TCP *tcp,
-                         uint16_t total_length) {
-  IPHeader *ip_hdr = (IPHeader *)buffer;
+void construct_ip_header(uint8_t* buffer, const TCP* tcp,
+  uint16_t total_length) {
+  IPHeader* ip_hdr = (IPHeader*)buffer;
   memset(ip_hdr, 0, 20);
   ip_hdr->ip_v = 4;
   ip_hdr->ip_hl = 5;
@@ -62,9 +62,9 @@ void construct_ip_header(uint8_t *buffer, const TCP *tcp,
 }
 
 // update tcp & ip checksum
-void update_tcp_ip_checksum(uint8_t *buffer) {
-  IPHeader *ip_hdr = (IPHeader *)buffer;
-  TCPHeader *tcp_hdr = (TCPHeader *)(buffer + ip_hdr->ip_hl * 4);
+void update_tcp_ip_checksum(uint8_t* buffer) {
+  IPHeader* ip_hdr = (IPHeader*)buffer;
+  TCPHeader* tcp_hdr = (TCPHeader*)(buffer + ip_hdr->ip_hl * 4);
   update_tcp_checksum(ip_hdr, tcp_hdr);
   update_ip_checksum(ip_hdr);
 }
@@ -77,12 +77,11 @@ uint32_t generate_initial_seq() {
   // "The generator is bound to a (possibly fictitious) 32
   // bit clock whose low order bit is incremented roughly every 4
   // microseconds."
-  UNIMPLEMENTED()
-  return 0;
+  return static_cast<uint32_t>((current_ts_usec() >> 2) % 0xFFFFFFFF);
 }
 
-void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
-  TCPHeader *tcp_header = (TCPHeader *)data;
+void process_tcp(const IPHeader* ip, const uint8_t* data, size_t size) {
+  TCPHeader* tcp_header = (TCPHeader*)data;
   if (!verify_tcp_checksum(ip, tcp_header)) {
     printf("Bad TCP checksum\n");
     return;
@@ -96,15 +95,15 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
   uint16_t seg_wnd = ntohs(tcp_header->window);
   // segment(payload) length
   uint32_t seg_len = ntohs(ip->ip_len) - ip->ip_hl * 4 - tcp_header->doff * 4;
-  const uint8_t *payload = data + tcp_header->doff * 4;
+  const uint8_t* payload = data + tcp_header->doff * 4;
 
   // iterate tcp connections in two pass
   // first pass: only exact matches
   // second pass: allow wildcard matches for listening socket
   // this gives priority to connected sockets
   for (int pass = 1; pass <= 2; pass++) {
-    for (auto &pair : tcp_fds) {
-      TCP *tcp = pair.second;
+    for (auto& pair : tcp_fds) {
+      TCP* tcp = pair.second;
       if (tcp->state == TCPState::CLOSED) {
         // ignore closed sockets
         continue;
@@ -113,11 +112,12 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
       if (pass == 1) {
         // first pass: exact match
         if (tcp->local_ip != ip->ip_dst || tcp->remote_ip != ip->ip_src ||
-            tcp->local_port != ntohs(tcp_header->dest) ||
-            tcp->remote_port != ntohs(tcp_header->source)) {
+          tcp->local_port != ntohs(tcp_header->dest) ||
+          tcp->remote_port != ntohs(tcp_header->source)) {
           continue;
         }
-      } else {
+      }
+      else {
         // second pass: allow wildcard
         if (tcp->local_ip != 0 && tcp->local_ip != ip->ip_dst) {
           continue;
@@ -126,11 +126,11 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           continue;
         }
         if (tcp->local_port != 0 &&
-            tcp->local_port != ntohs(tcp_header->dest)) {
+          tcp->local_port != ntohs(tcp_header->dest)) {
           continue;
         }
         if (tcp->remote_port != 0 &&
-            tcp->remote_port != ntohs(tcp_header->source)) {
+          tcp->remote_port != ntohs(tcp_header->source)) {
           continue;
         }
       }
@@ -139,16 +139,18 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
       if (tcp_header->doff > 20 / 4) {
         // options exists
         // check TCP option header: MSS
-        uint8_t *opt_ptr = (uint8_t *)data + 20;
-        uint8_t *opt_end = (uint8_t *)data + tcp_header->doff * 4;
+        uint8_t* opt_ptr = (uint8_t*)data + 20;
+        uint8_t* opt_end = (uint8_t*)data + tcp_header->doff * 4;
         while (opt_ptr < opt_end) {
           if (*opt_ptr == 0x00) {
             // End Of Option List
             break;
-          } else if (*opt_ptr == 0x01) {
+          }
+          else if (*opt_ptr == 0x01) {
             // No-Operation
             opt_ptr++;
-          } else if (*opt_ptr == 0x02) {
+          }
+          else if (*opt_ptr == 0x02) {
             // MSS
             uint8_t len = opt_ptr[1];
             if (len != 4) {
@@ -160,11 +162,13 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
             if (tcp_header->syn) {
               tcp->remote_mss = mss;
               printf("Remote MSS is %d\n", mss);
-            } else {
+            }
+            else {
               printf("Remote sent MSS option header in !SYN packet\n");
             }
             opt_ptr += len;
-          } else {
+          }
+          else {
             printf("Unrecognized TCP option: %d\n", *opt_ptr);
             break;
           }
@@ -191,14 +195,14 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           // <SEQ=SEG.ACK><CTL=RST>
           // Return."
           UNIMPLEMENTED()
-          return;
+            return;
         }
 
         // "third check for a SYN"
         if (tcp_header->syn) {
           // create a new socket for the connection
           int new_fd = tcp_socket();
-          TCP *new_tcp = tcp_fds[new_fd];
+          TCP* new_tcp = tcp_fds[new_fd];
           tcp->accept_queue.push_back(new_fd);
 
           // initialize
@@ -226,7 +230,30 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           // with 4 bytes option(MSS)
           // "a SYN segment sent of the form:
           // <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>"
-          UNIMPLEMENTED()
+          uint8_t buffer[44];
+          construct_ip_header(buffer, new_tcp, sizeof(buffer));
+
+          // tcp
+          TCPHeader* tcp_hdr = (TCPHeader*)&buffer[20];
+          memset(tcp_hdr, 0, 20);
+          tcp_hdr->source = htons(new_tcp->local_port);
+          tcp_hdr->dest = htons(new_tcp->remote_port);
+          tcp_hdr->seq = htonl(initial_seq);
+          tcp_hdr->ack_seq = htonl(new_tcp->rcv_nxt);
+
+          // flags
+          tcp_hdr->doff = 24 / 4; // 24 bytes
+          tcp_hdr->syn = 1;
+          tcp_hdr->ack = 1;
+
+          // window size
+          tcp_hdr->window = htons(new_tcp->recv.free_bytes());
+
+          // calculate checksum
+          update_tcp_ip_checksum(buffer);
+
+          // send
+          send_packet(buffer, sizeof(buffer));
 
           // "SND.NXT is set to ISS+1 and SND.UNA to ISS.  The connection
           // state should be changed to SYN-RECEIVED."
@@ -251,10 +278,10 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           //<SEQ=SEG.ACK><CTL=RST>
           // and discard the segment.  Return."
           if (tcp_seq_le(seg_ack, tcp->iss) ||
-              tcp_seq_gt(seg_ack, tcp->snd_nxt)) {
+            tcp_seq_gt(seg_ack, tcp->snd_nxt)) {
             // send a reset when !RST
             UNIMPLEMENTED()
-            return;
+              return;
           }
         }
 
@@ -277,7 +304,11 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           // SEG.SEQ.  SND.UNA should be advanced to equal SEG.ACK (if there
           // is an ACK), and any segments on the retransmission queue which
           // are thereby acknowledged should be removed."
-          UNIMPLEMENTED()
+          tcp->rcv_nxt = seg_seq + 1;
+          tcp->irs = seg_seq;
+          if (tcp_header->ack) {
+            tcp->snd_una = seg_ack;
+          }
 
           if (tcp_seq_gt(tcp->snd_una, tcp->iss)) {
             // "If SND.UNA > ISS (our SYN has been ACKed), change the connection
@@ -288,7 +319,29 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
             // "form an ACK segment
             // <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
             // and send it."
-            UNIMPLEMENTED()
+            uint8_t buffer[40];
+            construct_ip_header(buffer, tcp, sizeof(buffer));
+
+            // tcp
+            TCPHeader* tcp_hdr = (TCPHeader*)&buffer[20];
+            memset(tcp_hdr, 0, 20);
+            tcp_hdr->source = htons(tcp->local_port);
+            tcp_hdr->dest = htons(tcp->remote_port);
+            tcp_hdr->seq = htonl(tcp->snd_nxt);
+            tcp_hdr->ack_seq = htonl(tcp->rcv_nxt);
+
+            // flags
+            tcp_hdr->doff = 20 / 4; // 20 bytes
+            tcp_hdr->ack = 1;
+
+            // window size
+            tcp_hdr->window = htons(tcp->recv.free_bytes());
+
+            // calculate checksum
+            update_tcp_ip_checksum(buffer);
+
+            // send
+            send_packet(buffer, sizeof(buffer));
 
             // TODO(step 2: 3-way handshake)
             // https://www.rfc-editor.org/rfc/rfc1122#page-94
@@ -297,8 +350,11 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
             // SND.WND <- SEG.WND
             // SND.WL1 <- SEG.SEQ
             // SND.WL2 <- SEG.ACK"
-            UNIMPLEMENTED()
-          } else {
+            tcp->snd_wnd = seg_wnd;
+            tcp->snd_wl1 = seg_seq;
+            tcp->snd_wl2 = seg_ack;
+          }
+          else {
             // "Otherwise enter SYN-RECEIVED"
             // "form a SYN,ACK segment
             //<SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
@@ -319,12 +375,12 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
       // https://www.rfc-editor.org/rfc/rfc793.html#page-69
       // "Otherwise,"
       if (tcp->state == TCPState::SYN_RCVD ||
-          tcp->state == TCPState::ESTABLISHED ||
-          tcp->state == TCPState::FIN_WAIT_1 ||
-          tcp->state == TCPState::FIN_WAIT_2 ||
-          tcp->state == TCPState::CLOSE_WAIT ||
-          tcp->state == TCPState::CLOSING || tcp->state == TCPState::LAST_ACK ||
-          tcp->state == TCPState::TIME_WAIT) {
+        tcp->state == TCPState::ESTABLISHED ||
+        tcp->state == TCPState::FIN_WAIT_1 ||
+        tcp->state == TCPState::FIN_WAIT_2 ||
+        tcp->state == TCPState::CLOSE_WAIT ||
+        tcp->state == TCPState::CLOSING || tcp->state == TCPState::LAST_ACK ||
+        tcp->state == TCPState::TIME_WAIT) {
 
         // "first check sequence number"
 
@@ -356,7 +412,7 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
             // "If SND.UNA =< SEG.ACK =< SND.NXT then enter ESTABLISHED state
             // and continue processing."
             if (tcp_seq_le(tcp->snd_una, seg_ack) &&
-                tcp_seq_le(seg_ack, tcp->snd_nxt)) {
+              tcp_seq_le(seg_ack, tcp->snd_nxt)) {
               tcp->set_state(TCPState::ESTABLISHED);
             }
           }
@@ -367,12 +423,12 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
             // "If SND.UNA < SEG.ACK =< SND.NXT then, set SND.UNA <- SEG.ACK."
             UNIMPLEMENTED()
 
-            // TODO(step 3: send & receive)
-            // "If SND.UNA < SEG.ACK =< SND.NXT, the send window should be
-            // updated.  If (SND.WL1 < SEG.SEQ or (SND.WL1 = SEG.SEQ and
-            // SND.WL2 =< SEG.ACK)), set SND.WND <- SEG.WND, set
-            // SND.WL1 <- SEG.SEQ, and set SND.WL2 <- SEG.ACK."
-            UNIMPLEMENTED()
+              // TODO(step 3: send & receive)
+              // "If SND.UNA < SEG.ACK =< SND.NXT, the send window should be
+              // updated.  If (SND.WL1 < SEG.SEQ or (SND.WL1 = SEG.SEQ and
+              // SND.WL2 =< SEG.ACK)), set SND.WND <- SEG.WND, set
+              // SND.WL1 <- SEG.SEQ, and set SND.WL2 <- SEG.ACK."
+              UNIMPLEMENTED()
           }
 
           // "FIN-WAIT-1 STATE"
@@ -412,9 +468,9 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
             // RCV.NXT and RCV.WND should not be reduced."
             UNIMPLEMENTED()
 
-            // "Send an acknowledgment of the form:
-            // <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>"
-            UNIMPLEMENTED()
+              // "Send an acknowledgment of the form:
+              // <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>"
+              UNIMPLEMENTED()
           }
         }
 
@@ -424,7 +480,7 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           // since the SEG.SEQ cannot be validated; drop the segment and
           // return."
           if (tcp->state == CLOSED || tcp->state == LISTEN ||
-              tcp->state == SYN_SENT) {
+            tcp->state == SYN_SENT) {
             return;
           }
 
@@ -439,14 +495,16 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
           if (tcp->state == SYN_RCVD || tcp->state == ESTABLISHED) {
             // Enter the CLOSE-WAIT state
             tcp->set_state(TCPState::CLOSE_WAIT);
-          } else if (tcp->state == FIN_WAIT_1) {
+          }
+          else if (tcp->state == FIN_WAIT_1) {
             // FIN-WAIT-1 STATE
             // "If our FIN has been ACKed (perhaps in this segment), then
             // enter TIME-WAIT, start the time-wait timer, turn off the other
             // timers; otherwise enter the CLOSING state."
 
             tcp->set_state(TCPState::TIME_WAIT);
-          } else if (tcp->state == FIN_WAIT_2) {
+          }
+          else if (tcp->state == FIN_WAIT_2) {
             // FIN-WAIT-2 STATE
             // "Enter the TIME-WAIT state.  Start the time-wait timer, turn
             // off the other timers."
@@ -471,7 +529,7 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
   // send RST segment
   // 40 = 20(IP) + 20(TCP)
   uint8_t buffer[40];
-  IPHeader *ip_hdr = (IPHeader *)buffer;
+  IPHeader* ip_hdr = (IPHeader*)buffer;
   memset(ip_hdr, 0, 20);
   ip_hdr->ip_v = 4;
   ip_hdr->ip_hl = 5;
@@ -482,7 +540,7 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
   ip_hdr->ip_dst = ip->ip_src;
 
   // tcp
-  TCPHeader *tcp_hdr = (TCPHeader *)&buffer[20];
+  TCPHeader* tcp_hdr = (TCPHeader*)&buffer[20];
   memset(tcp_hdr, 0, 20);
   tcp_hdr->source = tcp_header->dest;
   tcp_hdr->dest = tcp_header->source;
@@ -495,7 +553,8 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
     // "<CTL=RST,ACK>"
     tcp_hdr->rst = 1;
     tcp_hdr->ack = 1;
-  } else {
+  }
+  else {
     // "If the ACK bit is on,"
     // "<SEQ=SEG.ACK>"
     tcp_hdr->seq = htonl(seg_ack);
@@ -509,7 +568,7 @@ void process_tcp(const IPHeader *ip, const uint8_t *data, size_t size) {
   send_packet(buffer, sizeof(buffer));
 }
 
-void update_tcp_checksum(const IPHeader *ip, TCPHeader *tcp) {
+void update_tcp_checksum(const IPHeader* ip, TCPHeader* tcp) {
   uint32_t checksum = 0;
 
   // pseudo header
@@ -529,26 +588,27 @@ void update_tcp_checksum(const IPHeader *ip, TCPHeader *tcp) {
   memcpy(&pseudo_header[10], &tcp_len, 2);
   for (int i = 0; i < 6; i++) {
     checksum +=
-        (((uint32_t)pseudo_header[i * 2]) << 8) + pseudo_header[i * 2 + 1];
+      (((uint32_t)pseudo_header[i * 2]) << 8) + pseudo_header[i * 2 + 1];
   }
 
   // "The checksum field is the 16 bit one's complement of the one's
   // complement sum of all 16 bit words in the header and text."
 
   // TCP header
-  uint8_t *tcp_data = (uint8_t *)tcp;
+  uint8_t* tcp_data = (uint8_t*)tcp;
   tcp->checksum = 0;
   for (int i = 0; i < tcp->doff * 2; i++) {
     checksum += (((uint32_t)tcp_data[i * 2]) << 8) + tcp_data[i * 2 + 1];
   }
 
   // TCP payload
-  uint8_t *payload = tcp_data + tcp->doff * 4;
+  uint8_t* payload = tcp_data + tcp->doff * 4;
   int payload_len = ntohs(ip->ip_len) - ip->ip_hl * 4 - tcp->doff * 4;
   for (int i = 0; i < payload_len; i++) {
     if ((i % 2) == 0) {
       checksum += (((uint32_t)payload[i]) << 8);
-    } else {
+    }
+    else {
       checksum += payload[i];
     }
   }
@@ -561,7 +621,7 @@ void update_tcp_checksum(const IPHeader *ip, TCPHeader *tcp) {
   tcp->checksum = htons(~checksum);
 }
 
-bool verify_tcp_checksum(const IPHeader *ip, const TCPHeader *tcp) {
+bool verify_tcp_checksum(const IPHeader* ip, const TCPHeader* tcp) {
   uint32_t checksum = 0;
 
   // pseudo header
@@ -581,25 +641,26 @@ bool verify_tcp_checksum(const IPHeader *ip, const TCPHeader *tcp) {
   memcpy(&pseudo_header[10], &tcp_len, 2);
   for (int i = 0; i < 6; i++) {
     checksum +=
-        (((uint32_t)pseudo_header[i * 2]) << 8) + pseudo_header[i * 2 + 1];
+      (((uint32_t)pseudo_header[i * 2]) << 8) + pseudo_header[i * 2 + 1];
   }
 
   // "The checksum field is the 16 bit one's complement of the one's
   // complement sum of all 16 bit words in the header and text."
 
   // TCP header
-  uint8_t *tcp_data = (uint8_t *)tcp;
+  uint8_t* tcp_data = (uint8_t*)tcp;
   for (int i = 0; i < tcp->doff * 2; i++) {
     checksum += (((uint32_t)tcp_data[i * 2]) << 8) + tcp_data[i * 2 + 1];
   }
 
   // TCP payload
-  uint8_t *payload = tcp_data + tcp->doff * 4;
+  uint8_t* payload = tcp_data + tcp->doff * 4;
   int payload_len = ntohs(ip->ip_len) - ip->ip_hl * 4 - tcp->doff * 4;
   for (int i = 0; i < payload_len; i++) {
     if ((i % 2) == 0) {
       checksum += (((uint32_t)payload[i]) << 8);
-    } else {
+    }
+    else {
       checksum += payload[i];
     }
   }
@@ -613,23 +674,19 @@ bool verify_tcp_checksum(const IPHeader *ip, const TCPHeader *tcp) {
 
 // TODO(step 1: sequence number comparison and generation)
 bool tcp_seq_lt(uint32_t a, uint32_t b) {
-  UNIMPLEMENTED()
-  return true;
+  return (b - a) < 0x80000000 && a != b;
 }
 
 bool tcp_seq_le(uint32_t a, uint32_t b) {
-  UNIMPLEMENTED()
-  return true;
+  return tcp_seq_lt(a, b) || a == b;
 }
 
 bool tcp_seq_gt(uint32_t a, uint32_t b) {
-  UNIMPLEMENTED()
-  return true;
+  return tcp_seq_lt(b, a);
 }
 
 bool tcp_seq_ge(uint32_t a, uint32_t b) {
-  UNIMPLEMENTED()
-  return true;
+  return tcp_seq_le(b, a);
 }
 
 // returns fd
@@ -637,7 +694,7 @@ int tcp_socket() {
   for (int i = 0;; i++) {
     if (tcp_fds.find(i) == tcp_fds.end()) {
       // found free fd, create one
-      TCP *tcp = new TCP;
+      TCP* tcp = new TCP;
       tcp_fds[i] = tcp;
 
       // add necessary initialization here
@@ -647,7 +704,7 @@ int tcp_socket() {
 }
 
 void tcp_connect(int fd, uint32_t dst_addr, uint16_t dst_port) {
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
 
   tcp->local_ip = client_ip;
   // random local port
@@ -680,7 +737,7 @@ void tcp_connect(int fd, uint32_t dst_addr, uint16_t dst_port) {
   construct_ip_header(buffer, tcp, sizeof(buffer));
 
   // tcp
-  TCPHeader *tcp_hdr = (TCPHeader *)&buffer[20];
+  TCPHeader* tcp_hdr = (TCPHeader*)&buffer[20];
   memset(tcp_hdr, 0, 20);
   tcp_hdr->source = htons(tcp->local_port);
   tcp_hdr->dest = htons(tcp->remote_port);
@@ -706,8 +763,8 @@ void tcp_connect(int fd, uint32_t dst_addr, uint16_t dst_port) {
   return;
 }
 
-ssize_t tcp_write(int fd, const uint8_t *data, size_t size) {
-  TCP *tcp = tcp_fds[fd];
+ssize_t tcp_write(int fd, const uint8_t* data, size_t size) {
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   // rfc793 page 56 SEND Call
@@ -715,8 +772,9 @@ ssize_t tcp_write(int fd, const uint8_t *data, size_t size) {
   if (tcp->state == TCPState::SYN_SENT || tcp->state == TCPState::SYN_RCVD) {
     // queue data for transmission
     return tcp->send.write(data, size);
-  } else if (tcp->state == TCPState::ESTABLISHED ||
-             tcp->state == TCPState::CLOSE_WAIT) {
+  }
+  else if (tcp->state == TCPState::ESTABLISHED ||
+    tcp->state == TCPState::CLOSE_WAIT) {
     // queue data for transmission
     size_t res = tcp->send.write(data, size);
 
@@ -730,51 +788,51 @@ ssize_t tcp_write(int fd, const uint8_t *data, size_t size) {
     size_t segment_len = 0;
     UNIMPLEMENTED()
 
-    if (segment_len > 0) {
-      printf("Sending segment of len %zu to remote\n", segment_len);
-      // send data now
+      if (segment_len > 0) {
+        printf("Sending segment of len %zu to remote\n", segment_len);
+        // send data now
 
-      // 20 IP header & 20 TCP header
-      uint16_t total_length = 20 + 20 + segment_len;
-      uint8_t buffer[MTU];
-      construct_ip_header(buffer, tcp, total_length);
+        // 20 IP header & 20 TCP header
+        uint16_t total_length = 20 + 20 + segment_len;
+        uint8_t buffer[MTU];
+        construct_ip_header(buffer, tcp, total_length);
 
-      // tcp
-      TCPHeader *tcp_hdr = (TCPHeader *)&buffer[20];
-      memset(tcp_hdr, 0, 20);
-      tcp_hdr->source = htons(tcp->local_port);
-      tcp_hdr->dest = htons(tcp->remote_port);
-      // this segment occupies range:
-      // [snd_nxt, snd_nxt+seg_len)
-      tcp_hdr->seq = htonl(tcp->snd_nxt);
-      tcp->snd_nxt += segment_len;
-      // flags
-      tcp_hdr->doff = 20 / 4; // 20 bytes
+        // tcp
+        TCPHeader* tcp_hdr = (TCPHeader*)&buffer[20];
+        memset(tcp_hdr, 0, 20);
+        tcp_hdr->source = htons(tcp->local_port);
+        tcp_hdr->dest = htons(tcp->remote_port);
+        // this segment occupies range:
+        // [snd_nxt, snd_nxt+seg_len)
+        tcp_hdr->seq = htonl(tcp->snd_nxt);
+        tcp->snd_nxt += segment_len;
+        // flags
+        tcp_hdr->doff = 20 / 4; // 20 bytes
 
-      // TODO(step 3: send & receive)
-      // set ack bit and ack_seq
+        // TODO(step 3: send & receive)
+        // set ack bit and ack_seq
 
-      // TODO(step 3: send & receive)
-      // window size: size of empty bytes in recv buffer
-      tcp_hdr->window = 0;
-      UNIMPLEMENTED();
+        // TODO(step 3: send & receive)
+        // window size: size of empty bytes in recv buffer
+        tcp_hdr->window = 0;
+        UNIMPLEMENTED();
 
-      // payload
-      size_t bytes_read = tcp->send.read(&buffer[40], segment_len);
-      // should never fail
-      assert(bytes_read == segment_len);
+        // payload
+        size_t bytes_read = tcp->send.read(&buffer[40], segment_len);
+        // should never fail
+        assert(bytes_read == segment_len);
 
-      update_tcp_ip_checksum(buffer);
-      send_packet(buffer, total_length);
-    }
+        update_tcp_ip_checksum(buffer);
+        send_packet(buffer, total_length);
+      }
 
     return res;
   }
   return -1;
 }
 
-ssize_t tcp_read(int fd, uint8_t *data, size_t size) {
-  TCP *tcp = tcp_fds[fd];
+ssize_t tcp_read(int fd, uint8_t* data, size_t size) {
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   // TODO(step 3: send & receive)
@@ -785,7 +843,7 @@ ssize_t tcp_read(int fd, uint8_t *data, size_t size) {
 }
 
 void tcp_shutdown(int fd) {
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   // CLOSE Call
@@ -797,7 +855,8 @@ void tcp_shutdown(int fd) {
     UNIMPLEMENTED();
 
     tcp->set_state(TCPState::FIN_WAIT_1);
-  } else if (tcp->state == TCPState::CLOSE_WAIT) {
+  }
+  else if (tcp->state == TCPState::CLOSE_WAIT) {
     // TODO(step 4: connection termination)
     // CLOSE_WAIT STATE
     // "Queue this request until all preceding SENDs have been
@@ -811,7 +870,7 @@ void tcp_close(int fd) {
   // shutdown first
   tcp_shutdown(fd);
 
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   // remove connection if closed
@@ -823,7 +882,7 @@ void tcp_close(int fd) {
 }
 
 void tcp_bind(int fd, be32_t addr, uint16_t port) {
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   tcp->local_ip = addr;
@@ -834,7 +893,7 @@ void tcp_bind(int fd, be32_t addr, uint16_t port) {
 }
 
 void tcp_listen(int fd) {
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   // enter listen state
@@ -842,13 +901,14 @@ void tcp_listen(int fd) {
 }
 
 int tcp_accept(int fd) {
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
 
   // pop fd from accept queue
   if (tcp->accept_queue.empty()) {
     return -1;
-  } else {
+  }
+  else {
     int fd = tcp->accept_queue.front();
     tcp->accept_queue.pop_front();
     return fd;
@@ -856,7 +916,7 @@ int tcp_accept(int fd) {
 }
 
 TCPState tcp_state(int fd) {
-  TCP *tcp = tcp_fds[fd];
+  TCP* tcp = tcp_fds[fd];
   assert(tcp);
   return tcp->state;
 }

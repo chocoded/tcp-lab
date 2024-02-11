@@ -1,9 +1,10 @@
 #include <assert.h>
+#include <cstdio>
 #include <set>
 
 #include "tcp.h"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   // test sequence comparison functions
   assert(tcp_seq_lt(0x00000000, 0x00000001));
   assert(tcp_seq_lt(0xFFFFFFFF, 0x00000000));
@@ -22,5 +23,6 @@ int main(int argc, char *argv[]) {
   assert(tcp_seq_ge(0x00001234, 0x0000));
   assert(tcp_seq_ge(0xFFFFFFFF, 0xFFFFF000));
 
+  printf("All tests passed🎉🎉🎉\n");
   return 0;
 }
